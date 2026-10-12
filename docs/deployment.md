@@ -1,5 +1,7 @@
 # GitHub Pages + Supabase 部署指南
 
+当前仓库：[CrystalJin-design/soul-arcana](https://github.com/CrystalJin-design/soul-arcana)。正式网站：https://crystaljin-design.github.io/soul-arcana/ 。Supabase项目为`dibcvjahfkktxlwxvtwp`，区域为新加坡`ap-southeast-1`。本机已连接该项目。
+
 ## 1. Supabase
 
 在Supabase账号中建立专用项目，优先选择靠近用户的亚洲区域。先使用账号已有免费额度；如需付费套餐，请由店主决定。免费项目长期无活动可能暂停，严格持续在线需根据Supabase当前套餐选择支持该要求的方案。
@@ -14,6 +16,8 @@ npx supabase db push
 ```
 
 `db push`应用`supabase/migrations`中的迁移。也可把同一迁移文件完整粘贴到项目SQL Editor执行。该迁移只创建`arcana_`前缀的表和函数；不修改其他业务。
+
+本次部署通过`supabase db query --linked --project-ref dibcvjahfkktxlwxvtwp --file supabase/migrations/202610120001_tarot.sql`执行迁移，并通过`supabase migration repair 202610120001 --status applied --linked`记录已应用状态。后续结构变更请创建新的迁移文件再执行`db push`。
 
 生成并发布函数。`--use-api`使用官方服务端打包，无需安装Docker：
 

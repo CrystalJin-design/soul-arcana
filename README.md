@@ -2,6 +2,8 @@
 
 午夜蓝与旧金色的塔罗自我探索网站。24道原创情境题、22种大阿尔卡那结果、22幅原创牌面，支持手机与电脑。
 
+正式网站：https://crystaljin-design.github.io/soul-arcana/ 。后端与数据库运行于Supabase新加坡项目`dibcvjahfkktxlwxvtwp`。店铺名称为“屿岸”。
+
 ## 已实现
 
 - 测评密码验证；一个密码最多开启3次；服务端数据库核算次数。
@@ -64,6 +66,8 @@ npm audit --omit=dev
 ```
 
 自动测试覆盖22种结果可达性、非法答案、三次限额、重复开始、进度持久化、跨密码隔离、并发修改冲突、提交幂等、公开报告与数据库访问权限。浏览器验证记录见[验收记录](docs/verification.md)。
+
+部署维护人员还可运行`node scripts/check-production.js`验证真实线上API。它创建独立QA密码，不使用发货CSV中的密码；运行前需有本机管理环境文件与`data/supabase-public-key.txt`。
 
 ## 保存与分享
 
