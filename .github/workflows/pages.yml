@@ -24,7 +24,8 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-      - run: npm ci
+      # Pages does not need the Supabase CLI's postinstall binary download.
+      - run: npm ci --ignore-scripts --no-audit
       - run: npm test
       - uses: actions/configure-pages@v5
         id: pages
