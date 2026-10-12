@@ -1,0 +1,4 @@
+project_id = "soul-arcana"
+
+[functions.tarot]
+verify_jwt = false
