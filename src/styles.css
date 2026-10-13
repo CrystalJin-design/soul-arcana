@@ -1037,18 +1037,26 @@ button {
   color: #a09a80;
   margin-top: 9px;
 }
-.report-qr {
-  text-align: center;
-  flex-shrink: 0;
+.report-contact {
+  max-width: 230px;
+  padding-left: 18px;
+  border-left: 1px solid #a9987455;
+  color: #68775f;
 }
-.report-qr img {
-  width: 75px;
-  height: 75px;
-}
-.report-qr span {
+.report-contact > span {
   display: block;
-  font-size: 7px;
-  color: #8b876e;
+  font: 500 12px/1.8 var(--serif);
+}
+.report-contact strong {
+  display: block;
+  font-size: 10px;
+  line-height: 1.8;
+  font-weight: 450;
+  overflow-wrap: anywhere;
+}
+.report-contact small {
+  font-size: 8px;
+  letter-spacing: 0;
   margin-top: 5px;
 }
 .report-disclaimer {
@@ -1252,6 +1260,8 @@ button {
 }
 .export-modal {
   max-width: 540px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .export-modal h2 {
   font-size: 20px;
@@ -1269,15 +1279,31 @@ button {
   margin: 20px 0;
 }
 .export-preview {
-  max-height: 44vh;
-  overflow: auto;
   border: 1px solid #b2a47a44;
   background: var(--paper);
-  scrollbar-width: thin;
 }
 .export-preview img {
   width: 100%;
   height: auto;
+  -webkit-touch-callout: default;
+  user-select: auto;
+}
+.export-actions {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  margin-bottom: 12px;
+  background: #14272e;
+}
+.export-actions .primary-button {
+  flex: 1;
+}
+.export-actions .text-button {
+  flex-shrink: 0;
 }
 .export-tip {
   font-size: 10px;
@@ -1803,6 +1829,8 @@ button {
   .report-footer {
     gap: 12px;
     padding: 23px 0 13px;
+    flex-direction: column;
+    align-items: stretch;
   }
   .report-footer > div:first-child {
     gap: 9px;
@@ -1819,12 +1847,20 @@ button {
     letter-spacing: 0.4px;
     line-height: 1.7;
   }
-  .report-qr img {
-    width: 58px;
-    height: 58px;
+  .report-contact {
+    max-width: none;
+    border-left: 0;
+    border-top: 1px solid #a9987455;
+    padding: 13px 0 0;
   }
-  .report-qr span {
-    font-size: 6px;
+  .report-contact > span {
+    font-size: 11px;
+  }
+  .report-contact small {
+    font-size: 8px;
+  }
+  .report-contact strong {
+    font-size: 11px;
   }
   .report-disclaimer {
     font-size: 6px;
@@ -1869,8 +1905,15 @@ button {
   .export-modal h2 {
     font-size: 18px;
   }
-  .export-preview {
-    max-height: 42vh;
+  .export-actions {
+    gap: 12px;
+  }
+  .export-actions .primary-button {
+    font-size: 11px;
+    padding: 14px 9px;
+  }
+  .export-actions .text-button {
+    font-size: 11px;
   }
   .empty-state h1 {
     font-size: 21px;
@@ -1979,9 +2022,15 @@ button {
   width: 38px;
   height: 38px;
 }
-.export-copy .report-qr img {
-  width: 75px;
-  height: 75px;
+.export-copy .report-footer {
+  flex-direction: row;
+  align-items: center;
+}
+.export-copy .report-contact {
+  max-width: 230px;
+  padding: 0 0 0 18px;
+  border-top: 0;
+  border-left: 1px solid #a9987455;
 }
 .export-copy .report-disclaimer {
   font-size: 7px;

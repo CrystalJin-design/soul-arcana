@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import defaultConfig from "../site.config.json";
 import { api, getToken, setToken, resultUrl, artUrl } from "./api.js";
+import { createAttemptSaver } from "./attempt-saver.js";
 
 const readRoute = () => {
   const result = location.hash.match(/^#\/result\/([a-f0-9]{48})$/i);
@@ -375,6 +376,7 @@ function Quiz({
   attempt,
   remaining,
   saving,
+  submitting,
   error,
   onChoose,
   onNavigate,
@@ -437,7 +439,7 @@ function Quiz({
               className={`choice ${selected === choice ? "selected" : ""}`}
               aria-pressed={selected === choice}
               onClick={() => onChoose(choice)}
-              disabled={saving}
+              disabled={submitting}
             >
               <span className="choice-letter">{"ABCD"[choice]}</span>
               <span>{option.text}</span>
@@ -464,17 +466,17 @@ function Quiz({
         <button
           className="secondary-button"
           onClick={() => onNavigate(index - 1)}
-          disabled={index === 0 || saving}
+          disabled={index === 0 || submitting}
         >
           <ArrowLeft size={17} />
           上一题
         </button>
         <button
           className="primary-button"
-          disabled={selected < 0 || saving || !!error}
+          disabled={selected < 0 || submitting}
           onClick={() => (index === 23 ? onSubmit() : onNavigate(index + 1))}
         >
-          {saving && index === 23 ? (
+          {submitting && index === 23 ? (
             <LoaderCircle size={17} className="spin" />
           ) : null}
           {index === 23 ? "揭晓我的灵魂底牌" : "下一题"}
@@ -500,7 +502,7 @@ function SectionTitle({ number, english, children }) {
     </div>
   );
 }
-function Report({ result, config, qr, reportRef }) {
+function Report({ result, config, reportRef }) {
   const card = result.card;
   return (
     <article className="report" ref={reportRef} id="result-report">
@@ -658,14 +660,17 @@ function Report({ result, config, qr, reportRef }) {
             </small>
           </p>
         </div>
-        {qr && (
-          <div className="report-qr">
-            <a href={resultUrl(result.id)} aria-label="查看这份灵魂档案">
-              <img src={qr} alt="扫码查看这份灵魂档案" width="84" height="84" />
-            </a>
-            <span>扫码查看完整档案</span>
-          </div>
-        )}
+        <div className="report-contact">
+          <span>{config.storeName} · 联系我们</span>
+          {config.supportWeChat ? (
+            <>
+              <small>客服微信</small>
+              <strong>{config.supportWeChat}</strong>
+            </>
+          ) : (
+            <strong>{config.supportContact}</strong>
+          )}
+        </div>
       </footer>
       <p className="report-disclaimer">
         塔罗象征的现代原创解读，供娱乐与自我观察参考。结果不作命运预测或心理诊断。
@@ -689,12 +694,12 @@ export default function App() {
   const [resultError, setResultError] = useState("");
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState("");
-  const [qr, setQr] = useState("");
   const [exportData, setExportData] = useState(null);
   const [exporting, setExporting] = useState(false);
   const reportRef = useRef(null);
   const startId = useRef(null);
-  const savingRef = useRef(false);
+  const saverRef = useRef(null);
+  const submittingRef = useRef(false);
   const toastTimer = useRef(null);
   const exportUrlRef = useRef(null);
   const notify = useCallback((message) => {
@@ -754,7 +759,6 @@ export default function App() {
     let cancelled = false;
     setResult(null);
     setResultError("");
-    setQr("");
     api(`/results/${route.id}`)
       .then((data) => {
         if (!cancelled) setResult(data);
@@ -762,19 +766,6 @@ export default function App() {
       .catch((e) => {
         if (!cancelled) setResultError(e.message);
       });
-    import("qrcode")
-      .then((module) =>
-        module.default.toDataURL(resultUrl(route.id), {
-          width: 160,
-          margin: 1,
-          errorCorrectionLevel: "M",
-          color: { dark: "#324238", light: "#f0eadb" },
-        }),
-      )
-      .then((data) => {
-        if (!cancelled) setQr(data);
-      })
-      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -782,10 +773,14 @@ export default function App() {
   useEffect(
     () => () => {
       clearTimeout(toastTimer.current);
+      saverRef.current?.dispose();
       if (exportUrlRef.current) URL.revokeObjectURL(exportUrlRef.current);
     },
     [],
   );
+  useEffect(() => {
+    if (ready && attempt) getSaver();
+  }, [ready, attempt?.id]);
 
   async function login(code) {
     setBusy(true);
@@ -808,6 +803,8 @@ export default function App() {
     try {
       await api("/session", { method: "DELETE" });
       setToken("");
+      saverRef.current?.dispose({ discard: true });
+      saverRef.current = null;
       setSession(null);
       setAttempt(null);
       startId.current = null;
@@ -862,64 +859,83 @@ export default function App() {
       setBusy(false);
     }
   }
-  async function save(next) {
-    if (savingRef.current) return;
-    savingRef.current = true;
-    setSaving(true);
-    setSaveError("");
-    setAttempt(next);
-    try {
-      const saved = await api(`/attempts/${next.id}/answers`, {
+  function getSaver() {
+    if (!attempt) return null;
+    if (
+      saverRef.current?.get().id === attempt.id &&
+      !saverRef.current.isDisposed()
+    ) return saverRef.current;
+    saverRef.current?.dispose();
+    const saver = createAttemptSaver(attempt, {
+      request: (next) => api(`/attempts/${next.id}/answers`, {
         method: "PUT",
         body: {
           answers: next.answers,
           currentQuestion: next.currentQuestion,
           revision: next.revision,
         },
-      });
-      setAttempt(saved);
-      setSession((old) => ({ ...old, activeAttempt: saved }));
-    } catch (e) {
-      setSaveError(e.message);
-      if (e.code === "REVISION_CONFLICT") {
-        const latest = await api("/session").catch(() => null);
-        if (latest?.activeAttempt) {
-          setAttempt(latest.activeAttempt);
-          setSession(latest);
-          setSaveError("");
-          notify("已载入另一页面保存的最新进度。");
+      }),
+      onChange: (next) => {
+        if (saverRef.current !== saver) return;
+        setAttempt(next);
+        setSession((old) => ({ ...old, activeAttempt: next }));
+      },
+      onSaving: (value) => {
+        if (saverRef.current === saver) setSaving(value);
+      },
+      onError: async (e) => {
+        if (saverRef.current !== saver) return;
+        setSaveError(e?.message || "");
+        if (e?.code === "REVISION_CONFLICT") {
+          const latest = await api("/session").catch(() => null);
+          if (saverRef.current === saver && latest?.activeAttempt) {
+            saver.dispose({ discard: true });
+            saverRef.current = null;
+            setAttempt(latest.activeAttempt);
+            setSession(latest);
+            setSaving(false);
+            setSaveError("");
+            notify("已载入另一页面保存的最新进度。");
+          }
         }
-      }
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
+      },
+    });
+    saverRef.current = saver;
+    saver.resume();
+    return saver;
   }
   function choose(choice) {
-    if (savingRef.current) return;
-    const answers = [...attempt.answers];
-    answers[attempt.currentQuestion] = choice;
-    save({ ...attempt, answers });
+    if (submittingRef.current) return;
+    const saver = getSaver();
+    const current = saver.get();
+    const answers = [...current.answers];
+    answers[current.currentQuestion] = choice;
+    saver.update({ answers });
   }
   function navigate(index) {
-    if (!savingRef.current) save({ ...attempt, currentQuestion: index });
+    if (!submittingRef.current) getSaver()?.update({ currentQuestion: index });
   }
   async function submit() {
-    if (busy || savingRef.current) return;
-    const missing = attempt.answers.findIndex((answer) => answer < 0);
+    if (busy || submittingRef.current) return;
+    const saver = getSaver();
+    const missing = saver.get().answers.findIndex((answer) => answer < 0);
     if (missing >= 0) {
       navigate(missing);
       notify("还有一道题等待你的选择。");
       return;
     }
+    submittingRef.current = true;
     setBusy(true);
-    setSaving(true);
     setSaveError("");
     try {
-      const data = await api(`/attempts/${attempt.id}/submit`, {
+      if (!(await saver.flush())) return;
+      const current = saver.get();
+      const data = await api(`/attempts/${current.id}/submit`, {
         method: "POST",
-        body: { answers: attempt.answers },
+        body: { answers: current.answers },
       });
+      saver.dispose({ discard: true });
+      saverRef.current = null;
       startId.current = null;
       go("result", data.resultId);
       setAttempt(null);
@@ -930,6 +946,7 @@ export default function App() {
     } catch (e) {
       setSaveError(e.message);
     } finally {
+      submittingRef.current = false;
       setBusy(false);
       setSaving(false);
     }
@@ -994,15 +1011,26 @@ export default function App() {
         img.src = bitmap.toDataURL("image/png");
         await img.decode();
       }
+      // Keep the same responsive rules used to measure the offscreen report.
+      // A wider capture viewport can reflow the footer beyond that height.
+      const reportHeight = Math.ceil(Math.max(
+        clone.scrollHeight,
+        clone.getBoundingClientRect().height,
+      ));
       const scale = Math.min(
         2,
-        Math.sqrt(12000000 / (720 * clone.scrollHeight)),
+        8192 / reportHeight,
+        Math.sqrt(8000000 / (720 * reportHeight)),
       );
       const canvas = await html2canvas(clone, {
         backgroundColor: "#f0eadb",
         scale,
         width: 720,
-        windowWidth: 1080,
+        height: reportHeight,
+        windowWidth: document.documentElement.clientWidth,
+        windowHeight: reportHeight,
+        scrollX: 0,
+        scrollY: 0,
         useCORS: true,
         logging: false,
       });
@@ -1021,6 +1049,9 @@ export default function App() {
       const data = {
         blob,
         url,
+        previewUrl: canvas.toDataURL("image/png"),
+        width: canvas.width,
+        height: canvas.height,
         filename: `${config.brand}-${result.card.name}-${result.id.slice(-6)}.png`,
       };
       setExportData(data);
@@ -1097,12 +1128,13 @@ export default function App() {
           questions={questions}
           attempt={attempt}
           remaining={session?.remaining || 0}
-          saving={saving || busy}
+          saving={saving}
+          submitting={busy}
           error={saveError}
           onChoose={choose}
           onNavigate={navigate}
           onSubmit={submit}
-          onRetrySave={() => save(attempt)}
+          onRetrySave={() => getSaver()?.flush()}
         />
       )}
       {route.type === "quiz" && (!ready || !questions.length) && (
@@ -1142,7 +1174,6 @@ export default function App() {
               <Report
                 result={result}
                 config={config}
-                qr={qr}
                 reportRef={reportRef}
               />
               <div className="result-actions">
@@ -1344,23 +1375,30 @@ export default function App() {
           ) : (
             exportData && (
               <>
-                <div className="export-preview">
-                  <img src={exportData.url} alt="可保存的完整测评结果长图" />
-                </div>
                 <p className="export-tip">
-                  手机可长按图片保存到相册，也可通过下方按钮选择系统保存方式。电脑会下载
-                  PNG 图片文件。
+                  下方是一张完整的报告长图，可向下滑动查看全部分析和联系方式。
+                  手机请长按图片保存，也可使用保存或下载按钮。
                 </p>
-                <button className="primary-button" onClick={saveOrShare}>
-                  <Share2 size={17} />
-                  保存 / 分享图片
-                </button>
-                <button
-                  className="text-button modal-text-button"
-                  onClick={() => download(exportData)}
-                >
-                  直接下载图片
-                </button>
+                <div className="export-actions">
+                  <button className="primary-button" onClick={saveOrShare}>
+                    <Share2 size={17} />
+                    保存 / 分享图片
+                  </button>
+                  <button
+                    className="text-button"
+                    onClick={() => download(exportData)}
+                  >
+                    下载图片
+                  </button>
+                </div>
+                <div className="export-preview">
+                  <img
+                    src={exportData.previewUrl}
+                    width={exportData.width}
+                    height={exportData.height}
+                    alt="长按保存完整测评报告，含全部分析和店铺联系方式"
+                  />
+                </div>
               </>
             )
           )}

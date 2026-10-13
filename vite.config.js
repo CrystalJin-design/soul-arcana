@@ -16,11 +16,7 @@ export default defineConfig(({ mode }) => {
       rolldownOptions: {
         output: {
           manualChunks: (id) =>
-            id.includes("html2canvas")
-              ? "export"
-              : id.includes("node_modules/qrcode")
-                ? "qr"
-                : undefined,
+            id.includes("html2canvas") ? "export" : undefined,
         },
       },
     },
